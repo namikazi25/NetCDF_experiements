@@ -2,7 +2,7 @@ import io
 import contextlib
 import base64
 import matplotlib.pyplot as plt
-import matplotlib.tri as tri  # <--- Add this import
+import matplotlib.tri as tri
 import xarray as xr
 import numpy as np
 import scipy
@@ -81,7 +81,7 @@ def execute_python_code(code_string: str, netcdf_path: str, scenario_path: str =
         "np": np,
         "plt": plt,
         "scipy": scipy,
-        "tri": tri,  # <--- Give LLM access to triangulation
+        "tri": tri, 
         "netcdf_path": netcdf_path,
         "scenario_path": scenario_path,
         "plot_unstructured": plot_unstructured,
@@ -95,8 +95,6 @@ def execute_python_code(code_string: str, netcdf_path: str, scenario_path: str =
     # Custom savefig to capture images
     def custom_savefig(*args, **kwargs):
         buf = io.BytesIO()
-        # Use the figure's savefig method directly to avoid recursion loop
-        # or call the original_savefig we saved
         try:
             plt.gcf().savefig(buf, format='png')
             buf.seek(0)
@@ -104,27 +102,27 @@ def execute_python_code(code_string: str, netcdf_path: str, scenario_path: str =
             images.append(img_str)
         except Exception as e:
             print(f"Error saving plot: {e}", file=stdout_capture)
-        
-        # Close the figure to free memory
         plt.close()
         
     local_env["plt"].savefig = custom_savefig
     local_env["plt"].show = custom_savefig
 
-    # Inject the loading logic automatically so the LLM can just assume ds exists
-    header_code = f"""
+    # Inject the loading logic automatically. 
+    # NOTE: We use the variable 'netcdf_path' directly from local_env, 
+    # instead of f-string injection, to avoid Windows path escape issues.
+    header_code = """
 import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 
 # AUTO-GENERATED LOADING
-ds = xr.open_dataset('{netcdf_path}')
+ds = xr.open_dataset(netcdf_path)
 ds_base = ds
 ds_comp = None
 """
     if scenario_path:
-        header_code += f"""
-ds_comp = xr.open_dataset('{scenario_path}')
+        header_code += """
+ds_comp = xr.open_dataset(scenario_path)
 print("System: Comparison Datasets Loaded.")
 """
 
@@ -135,8 +133,13 @@ print("System: Comparison Datasets Loaded.")
         with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
             exec(full_code, {}, local_env)
             
+        # CRITICAL FIX: Truncate Output to prevent LLM Context overflow
+        output_text = stdout_capture.getvalue()
+        if len(output_text) > 5000:
+            output_text = output_text[:5000] + "\n... [Output Truncated] ..."
+            
         return {
-            "stdout": stdout_capture.getvalue(),
+            "stdout": output_text,
             "stderr": stderr_capture.getvalue(),
             "images": images,
             "success": True
