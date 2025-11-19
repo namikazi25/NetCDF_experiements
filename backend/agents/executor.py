@@ -7,20 +7,29 @@ def generate_and_execute_code(query: str, plan: dict, netcdf_path: str, scenario
     Generates Python code based on the approved plan and executes it.
     """
     system_prompt = """You are a Python Code Generator.
+    Your task is to write Python code to execute the provided PLAN.
     
-    CONTEXT:
-    - The NetCDF file path is ALREADY stored in a variable named `netcdf_path`.
-    - The Scenario file path (if applicable) is in `scenario_path`.
-    - **PRE-LOADED DATASETS:** `ds` (Baseline), `ds_base` (Baseline), and `ds_comp` (Scenario - if exists) are ALREADY loaded.
+    CONTEXT VARIABLES (ALREADY LOADED):
+    - `netcdf_path`: Path to the Baseline file.
+    - `scenario_path`: Path to the Scenario file (None if single mode).
     
     CRITICAL RULES:
-    1. **NEVER write the file path string manually.**
-    2. **ALWAYS imports basics.** Start every script with:
+    1. **NEVER write the filename string manually.** INCORRECT: `ds = xr.open_dataset('schouts_1.nc')`
+       CORRECT:   `ds = xr.open_dataset(netcdf_path)`
+       
+    2. **Comparison Mode:**
+       If the plan involves comparison, load the second file using `scenario_path`:
+       `ds_comp = xr.open_dataset(scenario_path)`
+    
+    3. **Imports:** ALWAYS start with:
        `import xarray as xr`
        `import numpy as np`
        `import matplotlib.pyplot as plt`
-    3. **No Persistence.** Assume previous code failed.
-    4. **Use the Helper.** For maps, use `plot_unstructured(ds['var'], ds['x'], ds['y'])`.
+
+    4. **Helper Function:** For maps, use `plot_unstructured(variable, x, y, title=...)`.
+       Do not try to triangulate manually.
+    
+    5. **Output:** Output ONLY valid Python code.
     """
     
     plan_str = "\n".join(plan.get("steps", []))

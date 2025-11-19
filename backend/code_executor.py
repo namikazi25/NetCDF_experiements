@@ -8,49 +8,53 @@ import numpy as np
 import scipy
 import os
 
-# Rename arguments to be LLM-friendly
-def plot_unstructured(variable, x, y, title="Unstructured Mesh Plot", cmap=None): 
+def plot_unstructured(variable, x, y, title="Unstructured Mesh Plot", cmap=None):
     """
-    Helper function to plot unstructured grid data.
-    Arguments:
-    variable -- The data array (values)
-    x -- The x-coordinates (nodes)
-    y -- The y-coordinates (nodes)
-    cmap -- Colormap to use (optional)
+    Robust plotting for SCHISM/Unstructured grids.
+    Automatically detects if a Diverging Colormap (Red-Blue) is needed for difference plots.
     """
-    # 1. Sanitize Inputs (Handle xarray DataArray vs numpy)
+    # 1. Sanitize Inputs: Convert xarray/DataArray to numpy
     if hasattr(variable, 'values'): variable = variable.values
     if hasattr(x, 'values'): x = x.values
     if hasattr(y, 'values'): y = y.values
 
-    # 2. Handle Time Dimension (Take last step if 2D)
+    # 2. Handle Time Dimension: If (Time, Node), take the last time step
     if variable.ndim > 1:
-        # If variable is (Time, Node), slice the last time step
+        print(f"Note: Variable has dimensions {variable.shape}. Plotting final time step.")
         variable = variable[-1]
 
-    # Smart Colormap Logic
+    # 3. Smart Colormap Logic
     vmin, vmax = None, None
+    
     if cmap is None:
-        # If data crosses zero significantly (indicating a difference plot), use Red-Blue
-        if np.min(variable) < 0 and np.max(variable) > 0:
-             cmap = 'RdBu_r' # Red (negative), White (zero), Blue (positive)
-             # Force center the colormap at 0
-             v_max = max(abs(np.min(variable)), abs(np.max(variable)))
-             vmin, vmax = -v_max, v_max
+        # Check if data spans positive and negative values (indicating a Difference plot)
+        # We use a threshold (1e-5) to ignore floating point noise around zero
+        data_min = np.nanmin(variable)
+        data_max = np.nanmax(variable)
+        
+        if data_min < -1e-5 and data_max > 1e-5:
+             # DIVERGING DATA (e.g., Difference) -> Use Red-White-Blue
+             cmap = 'RdBu_r' 
+             # Force zero to be white by centering vmin/vmax
+             limit = max(abs(data_min), abs(data_max))
+             vmin, vmax = -limit, limit
         else:
+             # SEQUENTIAL DATA (e.g., Depth, Elevation) -> Use Viridis
              cmap = 'viridis'
 
     try:
         plt.figure(figsize=(10, 8))
-        # Use standard triangulation
+        
+        # Plot with automatic or calculated vmin/vmax
         plt.tripcolor(x, y, variable, shading='flat', cmap=cmap, vmin=vmin, vmax=vmax)
+        
         plt.colorbar(label="Value")
         plt.title(title)
         plt.xlabel("Longitude")
         plt.ylabel("Latitude")
         plt.axis('equal')
         
-        # Save to buffer logic...
+        # Save to buffer
         buf = io.BytesIO()
         plt.savefig(buf, format='png')
         buf.seek(0)
