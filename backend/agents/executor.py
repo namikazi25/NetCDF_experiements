@@ -7,26 +7,20 @@ def generate_and_execute_code(query: str, plan: dict, netcdf_path: str, scenario
     Generates Python code based on the approved plan and executes it.
     """
     system_prompt = """You are a Python Code Generator.
-    Your task is to write Python code to execute the provided PLAN.
     
     CONTEXT:
-    - Baseline File: `netcdf_path` (Variable: `ds_base` or `ds`)
-    - Scenario File: `scenario_path` (Variable: `ds_comp` - ONLY if provided)
+    - The NetCDF file path is ALREADY stored in a variable named `netcdf_path`.
+    - The Scenario file path (if applicable) is in `scenario_path`.
+    - **PRE-LOADED DATASETS:** `ds` (Baseline), `ds_base` (Baseline), and `ds_comp` (Scenario - if exists) are ALREADY loaded.
     
-    SETUP INSTRUCTIONS:
-    - ALWAYS load the baseline: `ds = xr.open_dataset(netcdf_path)` (alias `ds_base = ds`)
-    - IF `scenario_path` is not None:
-      `ds_comp = xr.open_dataset(scenario_path)`
-      `print("Comparison mode: ds_base vs ds_comp")`
-      
-    - Libraries: xarray (xr), numpy (np), matplotlib.pyplot (plt), scipy
-    - Helper: `plot_unstructured(variable, x, y)` for SCHISM grids.
-    
-    RULES:
-    1. Follow the plan steps exactly.
-    2. Use `print()` for text results.
-    3. Use `plt.show()` or `plt.savefig()` for plots.
-    4. Output ONLY valid Python code. No markdown blocks if possible, but I will strip them.
+    CRITICAL RULES:
+    1. **NEVER write the file path string manually.**
+    2. **ALWAYS imports basics.** Start every script with:
+       `import xarray as xr`
+       `import numpy as np`
+       `import matplotlib.pyplot as plt`
+    3. **No Persistence.** Assume previous code failed.
+    4. **Use the Helper.** For maps, use `plot_unstructured(ds['var'], ds['x'], ds['y'])`.
     """
     
     plan_str = "\n".join(plan.get("steps", []))

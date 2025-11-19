@@ -2,28 +2,55 @@ import io
 import contextlib
 import base64
 import matplotlib.pyplot as plt
+import matplotlib.tri as tri  # <--- Add this import
 import xarray as xr
 import numpy as np
 import scipy
 import os
 
-def plot_unstructured(variable, node_x, node_y, title="Unstructured Mesh Plot"):
+# Rename arguments to be LLM-friendly
+def plot_unstructured(variable, x, y, title="Unstructured Mesh Plot", cmap=None): 
     """
-    Helper function to plot unstructured grid data (SCHISM).
-    variable: 1D array of values at nodes
-    node_x: 1D array of x-coordinates
-    node_y: 1D array of y-coordinates
+    Helper function to plot unstructured grid data.
+    Arguments:
+    variable -- The data array (values)
+    x -- The x-coordinates (nodes)
+    y -- The y-coordinates (nodes)
+    cmap -- Colormap to use (optional)
     """
+    # 1. Sanitize Inputs (Handle xarray DataArray vs numpy)
+    if hasattr(variable, 'values'): variable = variable.values
+    if hasattr(x, 'values'): x = x.values
+    if hasattr(y, 'values'): y = y.values
+
+    # 2. Handle Time Dimension (Take last step if 2D)
+    if variable.ndim > 1:
+        # If variable is (Time, Node), slice the last time step
+        variable = variable[-1]
+
+    # Smart Colormap Logic
+    vmin, vmax = None, None
+    if cmap is None:
+        # If data crosses zero significantly (indicating a difference plot), use Red-Blue
+        if np.min(variable) < 0 and np.max(variable) > 0:
+             cmap = 'RdBu_r' # Red (negative), White (zero), Blue (positive)
+             # Force center the colormap at 0
+             v_max = max(abs(np.min(variable)), abs(np.max(variable)))
+             vmin, vmax = -v_max, v_max
+        else:
+             cmap = 'viridis'
+
     try:
         plt.figure(figsize=(10, 8))
-        plt.tripcolor(node_x, node_y, variable, shading='flat')
+        # Use standard triangulation
+        plt.tripcolor(x, y, variable, shading='flat', cmap=cmap, vmin=vmin, vmax=vmax)
         plt.colorbar(label="Value")
         plt.title(title)
         plt.xlabel("Longitude")
         plt.ylabel("Latitude")
         plt.axis('equal')
         
-        # Save to buffer
+        # Save to buffer logic...
         buf = io.BytesIO()
         plt.savefig(buf, format='png')
         buf.seek(0)
@@ -50,6 +77,7 @@ def execute_python_code(code_string: str, netcdf_path: str, scenario_path: str =
         "np": np,
         "plt": plt,
         "scipy": scipy,
+        "tri": tri,  # <--- Give LLM access to triangulation
         "netcdf_path": netcdf_path,
         "scenario_path": scenario_path,
         "plot_unstructured": plot_unstructured,
@@ -79,9 +107,29 @@ def execute_python_code(code_string: str, netcdf_path: str, scenario_path: str =
     local_env["plt"].savefig = custom_savefig
     local_env["plt"].show = custom_savefig
 
+    # Inject the loading logic automatically so the LLM can just assume ds exists
+    header_code = f"""
+import xarray as xr
+import numpy as np
+import matplotlib.pyplot as plt
+
+# AUTO-GENERATED LOADING
+ds = xr.open_dataset('{netcdf_path}')
+ds_base = ds
+ds_comp = None
+"""
+    if scenario_path:
+        header_code += f"""
+ds_comp = xr.open_dataset('{scenario_path}')
+print("System: Comparison Datasets Loaded.")
+"""
+
+    # Combine header + LLM code
+    full_code = header_code + "\n" + code_string
+
     try:
         with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
-            exec(code_string, {}, local_env)
+            exec(full_code, {}, local_env)
             
         return {
             "stdout": stdout_capture.getvalue(),
