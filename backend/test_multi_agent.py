@@ -16,10 +16,13 @@ def test_orchestrator():
     
     try:
         print("Testing Orchestrator...")
-        metadata = {
-            "dims": {"x": 10, "y": 10},
-            "data_vars": {"temperature": {"dims": ("x", "y"), "dtype": "float64"}}
+        raw_metadata = {
+            "filename": "test_multi_agent.nc",
+            "time_horizon": "No time dimension",
+            "variables": {"temperature": {"dims": ("x", "y"), "desc": "Test Data", "units": "K"}},
+            "derived_concepts": []
         }
+        metadata = {"baseline": raw_metadata}
         
         query = "Calculate the mean temperature."
         

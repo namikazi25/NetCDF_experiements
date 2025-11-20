@@ -1,0 +1,68 @@
+{
+    "concepts": {
+        "velocity": {
+            "description": "Horizontal water speed",
+            "definitions": [
+                {
+                    "model": "SCHISM",
+                    "type": "vector_magnitude",
+                    "components": [
+                        "hvel_x",
+                        "hvel_y"
+                    ]
+                },
+                {
+                    "model": "ROMS",
+                    "type": "vector_magnitude",
+                    "components": [
+                        "u",
+                        "v"
+                    ]
+                },
+                {
+                    "model": "WRF",
+                    "type": "vector_magnitude",
+                    "components": [
+                        "U10",
+                        "V10"
+                    ]
+                }
+            ]
+        },
+        "elevation": {
+            "description": "Water surface elevation above datum",
+            "definitions": [
+                {
+                    "model": "SCHISM",
+                    "type": "direct",
+                    "variable": "elev"
+                },
+                {
+                    "model": "ROMS",
+                    "type": "direct",
+                    "variable": "zeta"
+                },
+                {
+                    "model": "FVCOM",
+                    "type": "direct",
+                    "variable": "zeta"
+                }
+            ]
+        },
+        "temperature": {
+            "description": "Water or Air Temperature",
+            "definitions": [
+                {
+                    "model": "SCHISM",
+                    "type": "direct",
+                    "variable": "temp"
+                },
+                {
+                    "model": "WRF",
+                    "type": "direct",
+                    "variable": "T2"
+                }
+            ]
+        }
+    }
+}

@@ -3,7 +3,9 @@ import os
 import shutil
 from agent_workflow import run_agent_workflow
 from orchestrator import run_orchestrator
-from profiling import generate_profile
+from profiling import check_compatibility
+from schema_registry import analyze_netcdf_schema
+from semantic_layer import resolve_concepts_for_schema # <--- New Import
 
 st.set_page_config(page_title="NetCDF LLM Analyst", layout="wide")
 
@@ -23,7 +25,7 @@ if "analysis" not in st.session_state:
 if "file_paths" not in st.session_state:
     st.session_state.file_paths = {}
 
-from profiling import generate_profile
+
 
 # ... (existing imports)
 
@@ -47,13 +49,38 @@ with st.sidebar:
                     f.write(baseline_file.getvalue())
                 
                 try:
-                    profile = generate_profile(file_path)
-                    st.session_state.metadata[baseline_file.name] = profile
-                    st.session_state.file_paths[baseline_file.name] = file_path
-                    # Default analysis to baseline
-                    if not st.session_state.analysis:
-                        st.session_state.analysis = profile
-                    st.success(f"Loaded Baseline: {baseline_file.name}")
+                    with st.spinner("Analyzing Schema & Vectors..."):
+                        # CALL THE NEW REGISTRY FUNCTION
+                        # This extracts vars and auto-detects wsh_x/wsh_y pairs
+                        schema = analyze_netcdf_schema(file_path)
+                        
+                        # Store this schema in session state
+                        # Store this schema in session state
+                        # st.session_state.metadata[baseline_file.name] = schema
+                        
+                        # 2. Level 2: Get Semantic Layer
+                        # This figures out if "velocity" is possible in this specific file
+                        concepts = resolve_concepts_for_schema(schema)
+                        
+                        # Store both
+                        st.session_state.metadata[baseline_file.name] = {
+                            "schema": schema,
+                            "concepts": concepts,
+                            "filename": baseline_file.name # Ensure filename is at top level for convenience
+                        }
+                        
+                        st.session_state.file_paths[baseline_file.name] = file_path
+                        
+                        # Default analysis to baseline
+                        if not st.session_state.analysis:
+                            st.session_state.analysis = schema
+                        
+                        st.success(f"Loaded {baseline_file.name}")
+                        
+                        # (Optional Debug) Show the user what concepts we found
+                        if schema.get("derived_concepts"):
+                            st.info(f"Auto-Detected Concepts: {[c['concept_name'] for c in schema['derived_concepts']]}")
+
                 except Exception as e:
                     st.error(f"Error: {e}")
 
@@ -66,10 +93,22 @@ with st.sidebar:
                     f.write(scenario_file.getvalue())
                 
                 try:
-                    profile = generate_profile(file_path)
-                    st.session_state.metadata[scenario_file.name] = profile
-                    st.session_state.file_paths[scenario_file.name] = file_path
-                    st.success(f"Loaded Scenario: {scenario_file.name}")
+                    with st.spinner("Analyzing Schema & Vectors..."):
+                        schema = analyze_netcdf_schema(file_path)
+                        # 2. Level 2: Get Semantic Layer
+                        concepts = resolve_concepts_for_schema(schema)
+                        
+                        st.session_state.metadata[scenario_file.name] = {
+                            "schema": schema,
+                            "concepts": concepts,
+                            "filename": scenario_file.name
+                        }
+                        st.session_state.file_paths[scenario_file.name] = file_path
+                        st.success(f"Loaded Scenario: {scenario_file.name}")
+                        
+                        if schema.get("derived_concepts"):
+                            st.info(f"Auto-Detected Concepts: {[c['concept_name'] for c in schema['derived_concepts']]}")
+
                 except Exception as e:
                     st.error(f"Error: {e}")
 
@@ -111,10 +150,23 @@ if st.session_state.analysis:
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            st.markdown(f"**File:** `{profile.get('filename')}`")
-            if "time_start" in profile:
-                st.markdown(f"**Time Horizon:** {profile['time_start']} to {profile['time_end']}")
-                st.markdown(f"**Time Steps:** {profile.get('time_steps')}")
+            # Handle new metadata structure
+            if "schema" in profile:
+                # It's the new structure
+                display_profile = profile["schema"]
+            else:
+                # Fallback for old structure (or direct schema object)
+                display_profile = profile
+
+            st.markdown(f"**File:** `{display_profile.get('filename')}`")
+            if "time_horizon" in display_profile:
+                 # Handle the dict structure of time_horizon if present
+                 th = display_profile['time_horizon']
+                 if isinstance(th, dict):
+                     st.markdown(f"**Time Horizon:** {th.get('start')} to {th.get('end')}")
+                     st.markdown(f"**Time Steps:** {th.get('steps')}")
+                 else:
+                     st.markdown(f"**Time Horizon:** {th}")
             
             if "max_depth" in profile:
                 st.markdown(f"**Max Depth:** {profile['max_depth']:.2f} m")
@@ -122,7 +174,8 @@ if st.session_state.analysis:
                 st.markdown(f"**Elevation Range:** {profile['elevation_range'][0]:.2f}m to {profile['elevation_range'][1]:.2f}m")
                 
             st.markdown("**Variables:**")
-            st.code(", ".join(profile.get("variables", [])[:10]) + ("..." if len(profile.get("variables", [])) > 10 else ""))
+            vars_list = list(display_profile.get("variables", {}).keys())
+            st.code(", ".join(vars_list[:10]) + ("..." if len(vars_list) > 10 else ""))
 
         with col2:
             if "preview_image" in profile:
@@ -134,10 +187,16 @@ if st.session_state.analysis:
         st.markdown("---")
         st.markdown("**Smart Suggestions:**")
         suggestions = []
-        if "elev" in profile.get("variables", []):
+        st.markdown("**Smart Suggestions:**")
+        suggestions = []
+        
+        # Use display_profile variables
+        vars_keys = display_profile.get("variables", {}).keys()
+        
+        if "elev" in vars_keys:
             suggestions.append("Plot the average water surface elevation across all time steps.")
             suggestions.append("What is the maximum elevation?")
-        if "hvel_x" in profile.get("variables", []) and "hvel_y" in profile.get("variables", []):
+        if "hvel_x" in vars_keys and "hvel_y" in vars_keys:
             suggestions.append("Calculate the maximum horizontal velocity magnitude.")
         
         cols = st.columns(len(suggestions))
@@ -178,21 +237,27 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
             # Container for live updates
             status_container = st.status("🤖 Multi-Agent Workflow Running...", expanded=True)
             
-            # Combine metadata from all files
-            combined_metadata = {"files": st.session_state.metadata}
+            # 1. Prepare the Bundle
+            metadata_bundle = {}
             
-            # Get paths from session state
-            baseline_path = st.session_state.get("baseline_path")
-            scenario_path = st.session_state.get("scenario_path")
-            
-            # Fallback for single file mode if paths not set (legacy support)
-            if not baseline_path and st.session_state.file_paths:
-                first_filename = list(st.session_state.file_paths.keys())[0]
-                baseline_path = os.path.abspath(st.session_state.file_paths[first_filename])
+            # Get Baseline Schema
+            if st.session_state.baseline_path:
+                base_name = os.path.basename(st.session_state.baseline_path)
+                metadata_bundle['baseline'] = st.session_state.metadata.get(base_name)
+                
+            # Get Scenario Schema (If it exists)
+            if st.session_state.scenario_path:
+                scen_name = os.path.basename(st.session_state.scenario_path)
+                metadata_bundle['scenario'] = st.session_state.metadata.get(scen_name)
             
             # Run Orchestrator
             try:
-                result = run_orchestrator(st.session_state.messages[-1]["content"], combined_metadata, baseline_path, scenario_path)
+                result = run_orchestrator(
+                    st.session_state.messages[-1]["content"], 
+                    metadata_bundle, # <--- This is the dictionary of schemas
+                    st.session_state.baseline_path, 
+                    st.session_state.scenario_path
+                )
                 
                 # Visualize Steps
                 for step in result.get("steps_log", []):
