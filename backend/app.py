@@ -150,15 +150,20 @@ if st.session_state.analysis:
         col1, col2 = st.columns([1, 1])
         
         with col1:
-            # Handle new metadata structure
-            if "schema" in profile:
-                # It's the new structure
+            # Handle new metadata structure safely
+            if isinstance(profile, dict) and "schema" in profile:
                 display_profile = profile["schema"]
             else:
-                # Fallback for old structure (or direct schema object)
                 display_profile = profile
 
-            st.markdown(f"**File:** `{display_profile.get('filename')}`")
+            # Fallback if display_profile is None or empty
+            if not display_profile:
+                st.error("Could not load profile data.")
+                st.stop()
+            
+            st.markdown(f"**File:** `{display_profile.get('filename', 'Unknown')}`")
+            
+            # Safe Time Horizon Access
             if "time_horizon" in display_profile:
                  # Handle the dict structure of time_horizon if present
                  th = display_profile['time_horizon']

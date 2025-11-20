@@ -10,9 +10,9 @@ MEMORY_FILE = os.path.join(BASE_DIR, "code_memory.json")
 def get_embedding(text):
     """Generates a vector embedding for the text."""
     try:
-        # Using standard OpenAI embedding model
-        # Note: Ensure your client supports embeddings or use a fallback/mock if strictly local
+        # CRITICAL UPDATE: Use the exact ID from your LM Studio
         embedding_model = os.getenv("LOCAL_EMBEDDING_MODEL", "text-embedding-qwen3-embedding-4b")
+        
         response = client.embeddings.create(
             input=text,
             model=embedding_model

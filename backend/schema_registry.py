@@ -69,40 +69,50 @@ def _get_time_info(ds):
 def format_context_for_planner(schemas: dict) -> str:
     """
     Smartly formats context for 1 or 2 files.
-    'schemas' is a dict: {'baseline': schema_dict, 'scenario': schema_dict (optional)}
+    'schemas' is a dict: {'baseline': wrapper_dict, 'scenario': wrapper_dict (optional)}
     """
+    # --- HELPER TO UNWRAP DATA ---
+    def get_real_schema(wrapper):
+        if not wrapper: return {}
+        # If the app passed the wrapper with 'schema' key, use that.
+        # Otherwise, assume it's the raw schema.
+        return wrapper.get('schema', wrapper)
+
+    base_wrapper = schemas.get('baseline')
+    scen_wrapper = schemas.get('scenario')
     
-    base_schema = schemas.get('baseline')
-    scen_schema = schemas.get('scenario')
+    base_schema = get_real_schema(base_wrapper)
+    scen_schema = get_real_schema(scen_wrapper)
     
     # Safety check for errors
     if "error" in base_schema:
         return f"Error reading baseline file: {base_schema['error']}"
     
     # --- HEADER GENERATION ---
-    if scen_schema:
+    if scen_wrapper and scen_schema:
         # COMPARISON MODE
         context = "### DATASET CONTEXT (COMPARISON MODE):\n"
-        context += f"1. **Baseline File:** `{base_schema['filename']}` (Loaded as `ds_base`)\n"
-        context += f"2. **Scenario File:** `{scen_schema['filename']}` (Loaded as `ds_scen`)\n"
+        context += f"1. **Baseline File:** `{base_schema.get('filename', 'baseline.nc')}` (Loaded as `ds_base`)\n"
+        context += f"2. **Scenario File:** `{scen_schema.get('filename', 'scenario.nc')}` (Loaded as `ds_scen`)\n"
         
         # Check compatibility (simple check)
-        if base_schema['variables'].keys() == scen_schema['variables'].keys():
+        if base_schema.get('variables', {}).keys() == scen_schema.get('variables', {}).keys():
              context += "\n**Structure Match:** Both files contain the same variables and dimensions.\n"
         else:
              context += "\n**Warning:** File structures differ slightly. Rely on Baseline structure.\n"
              
     else:
         # SINGLE MODE
-        context = f"### DATASET CONTEXT: {base_schema['filename']}\n"
+        context = f"### DATASET CONTEXT: {base_schema.get('filename', 'file.nc')}\n"
         context += "(Loaded as `ds`)\n"
 
     # --- SHARED SCHEMA DETAILS ---
-    # We typically only need to list variables once if they are the same model output
-    context += f"Time Horizon: {base_schema['time_horizon']}\n\n"
+    # Safely access time_horizon
+    th = base_schema.get('time_horizon', 'Unknown')
+    context += f"Time Horizon: {th}\n\n"
     
     # 1. Derived Concepts (Vectors)
-    if base_schema["derived_concepts"]:
+    if base_schema.get("derived_concepts"):
         context += "### CALCULABLE CONCEPTS (Vectors):\n"
         for con in base_schema["derived_concepts"]:
             context += f"- **{con['concept_name']}**: Formula: `{con['formula']}`\n"
@@ -110,8 +120,7 @@ def format_context_for_planner(schemas: dict) -> str:
 
     # 2. Raw Variables
     context += "### RAW VARIABLES:\n"
-    for name, meta in base_schema["variables"].items():
+    for name, meta in base_schema.get("variables", {}).items():
         context += f"- `{name}` ({meta['dims']}): {meta['desc']}\n"
 
     return context
-
