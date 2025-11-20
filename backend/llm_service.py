@@ -8,17 +8,24 @@ load_dotenv()
 # Default to OpenRouter, but allow override
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 LM_STUDIO_BASE_URL = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "auto").lower() # auto, openrouter, local
 
-# If API key is present, use OpenRouter, otherwise try local LM Studio
-if OPENROUTER_API_KEY:
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=OPENROUTER_API_KEY,
-    )
-    MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
-else:
-    client = OpenAI(base_url=LM_STUDIO_BASE_URL, api_key="lm-studio")
-    MODEL = "local-model" # LM Studio usually ignores this or uses loaded model
+def get_client():
+    if LLM_PROVIDER == "openrouter":
+        if not OPENROUTER_API_KEY:
+            raise ValueError("LLM_PROVIDER is 'openrouter' but OPENROUTER_API_KEY is not set.")
+        return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=OPENROUTER_API_KEY), os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
+    
+    elif LLM_PROVIDER == "local":
+        return OpenAI(base_url=LM_STUDIO_BASE_URL, api_key="lm-studio"), "local-model"
+    
+    else: # "auto"
+        if OPENROUTER_API_KEY:
+            return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=OPENROUTER_API_KEY), os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
+        else:
+            return OpenAI(base_url=LM_STUDIO_BASE_URL, api_key="lm-studio"), "local-model"
+
+client, MODEL = get_client()
 
 def format_metadata_context(metadata: dict) -> str:
     # Check if this is a multi-file dict
