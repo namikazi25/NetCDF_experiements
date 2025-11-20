@@ -75,6 +75,10 @@ def format_context_for_planner(schemas: dict) -> str:
     base_schema = schemas.get('baseline')
     scen_schema = schemas.get('scenario')
     
+    # Safety check for errors
+    if "error" in base_schema:
+        return f"Error reading baseline file: {base_schema['error']}"
+    
     # --- HEADER GENERATION ---
     if scen_schema:
         # COMPARISON MODE

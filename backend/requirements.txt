@@ -9,3 +9,6 @@ pandas
 python-dotenv
 matplotlib
 scipy
+geopandas
+shapely
+streamlit

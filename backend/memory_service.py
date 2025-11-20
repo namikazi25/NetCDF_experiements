@@ -12,9 +12,10 @@ def get_embedding(text):
     try:
         # Using standard OpenAI embedding model
         # Note: Ensure your client supports embeddings or use a fallback/mock if strictly local
+        embedding_model = os.getenv("LOCAL_EMBEDDING_MODEL", "text-embedding-qwen3-embedding-4b")
         response = client.embeddings.create(
             input=text,
-            model="text-embedding-3-small" # or your preferred model
+            model=embedding_model
         )
         return response.data[0].embedding
     except Exception as e:
@@ -79,6 +80,11 @@ def find_similar_code(current_query, threshold=0.75):
         norm_b = np.linalg.norm(vec_b)
         
         if norm_a == 0 or norm_b == 0:
+            continue
+            
+        # Dimension check
+        if vec_a.shape != vec_b.shape:
+            print(f"Warning: Embedding dimension mismatch ({vec_a.shape} vs {vec_b.shape}). Skipping memory entry.")
             continue
             
         score = np.dot(vec_a, vec_b) / (norm_a * norm_b)
