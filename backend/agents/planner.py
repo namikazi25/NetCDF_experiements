@@ -4,6 +4,7 @@ from llm_service import client, MODEL
 from schema_registry import format_context_for_planner
 from semantic_layer import format_semantic_context
 from memory_service import find_similar_code
+from tool_registry import generate_tool_documentation
 
 def plan_task(query: str, metadata_bundle: dict) -> dict:
     
@@ -50,7 +51,12 @@ def plan_task(query: str, metadata_bundle: dict) -> dict:
            - If the user asks for a "Map", generate THREE plots: Baseline, Scenario, and Difference.
         """
 
+    # 1. Get the dynamic tool documentation
+    tool_docs = generate_tool_documentation()
+
     system_prompt = f"""You are a Senior Data Scientist acting as a Planner.
+    
+    {tool_docs}
     
     {context_str}
     
@@ -59,17 +65,26 @@ def plan_task(query: str, metadata_bundle: dict) -> dict:
     {memory_context}
 
     ### PLANNING RULES:
-    1. **Terminology:** If the user asks for a Concept (e.g. "Plot Velocity"), CHECK the "SEMANTIC CONCEPTS" list.
+    1. **Tool Priority:** ALWAYS prefer using the tools listed above over writing raw pandas/xarray loops.
+       - If user asks for "Scenario comparison", plan to use `get_schism_node_data` twice, then `get_elevation_difference`.
+       - If user asks for "Wave Velocity", plan to use `get_schism_node_data` then `calculate_wave_velocity`.
+    
+    2. **Data Flow:**
+       - Step 1: Load data -> `df = get_schism_node_data(netcdf_path)`
+       - Step 2: Process -> `df = calculate_wave_velocity(df)`
+       - Step 3: Plot -> Use `geopandas` on the resulting `df`.
+    
+    3. **Terminology:** If the user asks for a Concept (e.g. "Plot Velocity"), CHECK the "SEMANTIC CONCEPTS" list.
        - If it says "Calculate using...", write that code.
        - If it says "Use variable...", use that variable name.
     
-    2. **Variable Selection:** Use "CALCULABLE CONCEPTS" if available.
-    3. **Spatial Filtering:** Use `ds.sel(..., method='nearest')` for specific points.
-    4. **Data Structures:** For sorting or tables, use `.to_dataframe()`.
+    4. **Variable Selection:** Use "CALCULABLE CONCEPTS" if available.
+    5. **Spatial Filtering:** Use `ds.sel(..., method='nearest')` for specific points.
+    6. **Data Structures:** For sorting or tables, use `.to_dataframe()`.
     {comparison_rules}
     
     OUTPUT FORMAT (JSON):
-    {{ "thought": "...", "steps": [...] }}
+    {{ "thought": "...", "steps": ["step 1", "step 2"] }}
     """
 
     messages = [

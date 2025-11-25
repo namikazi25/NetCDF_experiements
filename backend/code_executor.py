@@ -7,6 +7,9 @@ import xarray as xr
 import numpy as np
 import scipy
 import os
+import pandas as pd
+import geopandas as gpd
+from tool_registry import get_tools_map
 
 def plot_unstructured(variable, x, y, title="Unstructured Mesh Plot", cmap=None):
     """
@@ -79,6 +82,8 @@ def execute_python_code(code_string: str, netcdf_path: str, scenario_path: str =
     local_env = {
         "xr": xr,
         "np": np,
+        "pd": pd, # Added pandas
+        "gpd": gpd, # Added geopandas
         "plt": plt,
         "scipy": scipy,
         "tri": tri, 
@@ -87,6 +92,11 @@ def execute_python_code(code_string: str, netcdf_path: str, scenario_path: str =
         "plot_unstructured": plot_unstructured,
         "print": lambda *args, **kwargs: print(*args, file=stdout_capture, **kwargs)
     }
+
+    # INJECT ALL TOOLS DYNAMICALLY
+    tool_map = get_tools_map()
+    local_env.update(tool_map)
+
     
     # Store original functions to restore later
     original_savefig = plt.savefig

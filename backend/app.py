@@ -140,6 +140,21 @@ with st.sidebar:
         for filename in st.session_state.metadata.keys():
             st.text(f"📄 {filename}")
 
+    st.markdown("---")
+    # Retry Logic
+    if st.session_state.messages:
+        # Find the last user message
+        last_user_msg = None
+        for msg in reversed(st.session_state.messages):
+            if msg["role"] == "user":
+                last_user_msg = msg
+                break
+        
+        if last_user_msg:
+            if st.button("🔄 Retry Last Query"):
+                st.session_state.messages.append({"role": "user", "content": last_user_msg["content"]})
+                st.rerun()
+
 # Main chat interface
 st.subheader("Chat Analysis")
 

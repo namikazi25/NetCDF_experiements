@@ -32,7 +32,17 @@ def generate_and_execute_code(query: str, plan: dict, netcdf_path: str, scenario
     5. **Output:** Output ONLY valid Python code.
     """
     
-    plan_str = "\n".join(plan.get("steps", []))
+    # Robustly handle steps, ensuring they are strings
+    steps = plan.get("steps", [])
+    cleaned_steps = []
+    for step in steps:
+        if isinstance(step, dict):
+            # Try to find a description or just dump the dict
+            cleaned_steps.append(step.get("description", step.get("step", str(step))))
+        else:
+            cleaned_steps.append(str(step))
+            
+    plan_str = "\n".join(cleaned_steps)
     
     messages = [
         {"role": "system", "content": system_prompt},
