@@ -269,7 +269,12 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
                     status_container.write(f"**{step['stage']}**: {step['status']}")
                     if step.get("output"):
                         with status_container.expander(f"Details: {step['stage']}"):
-                            st.json(step["output"])
+                            output = step["output"]
+                            # Handle both string and dict outputs
+                            if isinstance(output, str):
+                                st.text(output)
+                            else:
+                                st.json(output)
                 
                 status_container.update(label="✅ Analysis Complete!", state="complete", expanded=False)
                 

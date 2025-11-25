@@ -17,13 +17,16 @@ def get_client():
         return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=OPENROUTER_API_KEY), os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
     
     elif LLM_PROVIDER == "local":
-        return OpenAI(base_url=LM_STUDIO_BASE_URL, api_key="lm-studio"), os.getenv("LOCAL_LLM_MODEL", "local-model")
+        # FORCE "local-model" string. 
+        # This tells LM Studio: "Use whatever model is currently loaded in the GUI"
+        return OpenAI(base_url=LM_STUDIO_BASE_URL, api_key="lm-studio"), "local-model"
     
     else: # "auto"
         if OPENROUTER_API_KEY:
             return OpenAI(base_url="https://openrouter.ai/api/v1", api_key=OPENROUTER_API_KEY), os.getenv("OPENROUTER_MODEL", "google/gemini-2.0-flash-exp:free")
         else:
-            return OpenAI(base_url=LM_STUDIO_BASE_URL, api_key="lm-studio"), os.getenv("LOCAL_LLM_MODEL", "local-model")
+             # FORCE "local-model" here too
+            return OpenAI(base_url=LM_STUDIO_BASE_URL, api_key="lm-studio"), "local-model"
 
 client, MODEL = get_client()
 

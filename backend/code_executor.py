@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import matplotlib.tri as tri
 import xarray as xr
 import numpy as np
+import pandas as pd
+import geopandas as gpd
 import scipy
 import os
 
@@ -79,6 +81,8 @@ def execute_python_code(code_string: str, netcdf_path: str, scenario_path: str =
     local_env = {
         "xr": xr,
         "np": np,
+        "pd": pd,
+        "gpd": gpd,
         "plt": plt,
         "scipy": scipy,
         "tri": tri, 
@@ -108,21 +112,24 @@ def execute_python_code(code_string: str, netcdf_path: str, scenario_path: str =
     local_env["plt"].show = custom_savefig
 
     # Inject the loading logic automatically. 
-    # NOTE: We use the variable 'netcdf_path' directly from local_env, 
+    # NOTE: We force engine='netcdf4' to stop the scipy fallback error
+    # We use the variable 'netcdf_path' directly from local_env, 
     # instead of f-string injection, to avoid Windows path escape issues.
     header_code = """
 import xarray as xr
 import numpy as np
+import pandas as pd
+import geopandas as gpd
 import matplotlib.pyplot as plt
 
 # AUTO-GENERATED LOADING
-ds = xr.open_dataset(netcdf_path)
+ds = xr.open_dataset(netcdf_path, engine='netcdf4')
 ds_base = ds
 ds_comp = None
 """
     if scenario_path:
         header_code += """
-ds_comp = xr.open_dataset(scenario_path)
+ds_comp = xr.open_dataset(scenario_path, engine='netcdf4')
 print("System: Comparison Datasets Loaded.")
 """
 

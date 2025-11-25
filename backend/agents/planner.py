@@ -66,6 +66,8 @@ def plan_task(query: str, metadata_bundle: dict) -> dict:
     2. **Variable Selection:** Use "CALCULABLE CONCEPTS" if available.
     3. **Spatial Filtering:** Use `ds.sel(..., method='nearest')` for specific points.
     4. **Data Structures:** For sorting or tables, use `.to_dataframe()`.
+    5. **Coordinate Names:** The dataset uses 'SCHISM_hgrid_node_x' and 'SCHISM_hgrid_node_y' for spatial coordinates.
+       When planning plots, mention these exact column names.
     {comparison_rules}
     
     OUTPUT FORMAT (JSON):

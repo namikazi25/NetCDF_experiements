@@ -24,10 +24,21 @@ def run_orchestrator(query: str, metadata: dict, netcdf_path: str, scenario_path
     steps_log[-1]["output"] = evaluation
     
     if not evaluation.get("approved", True):
-        # In a real system, we would loop back to planner with feedback.
-        # For prototype, we'll just warn and proceed or stop.
-        # Let's proceed but note the warning.
-        steps_log.append({"stage": "Warning", "status": "warning", "output": "Plan was flagged but proceeding."})
+        # Feedback loop: Re-plan with evaluator's feedback
+        feedback = evaluation.get("feedback", "Plan needs improvement")
+        steps_log.append({
+            "stage": "Re-Planning", 
+            "status": "running", 
+            "output": f"Plan rejected. Feedback: {feedback}"
+        })
+        
+        # Call planner again with feedback
+        plan = plan_task(
+            f"{query}\n\nPREVIOUS PLAN FEEDBACK: {feedback}\nPlease revise the plan to address this feedback.",
+            metadata
+        )
+        steps_log[-1]["status"] = "complete"
+        steps_log[-1]["output"] = plan
     
     # 3. Execution
     steps_log.append({"stage": "Execution", "status": "running"})

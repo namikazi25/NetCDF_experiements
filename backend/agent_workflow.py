@@ -10,25 +10,22 @@ def run_agent_workflow(query: str, metadata: dict, netcdf_path: str) -> dict:
     context = format_metadata_context(metadata)
     
     system_prompt = """You are a Python Data Scientist.
-    You have access to a Python environment with xarray, numpy, scipy, and matplotlib.
     
     Your goal is to answer the user's question by writing Python code.
     
     RULES:
     1. Do NOT describe how to solve the problem. Write the code to solve it.
-    2. Use `print()` to output specific numbers or findings.
-    3. Use `plt.show()` or `plt.savefig()` to generate plots.
-    4. For unstructured grids (SCHISM), use the helper function:
-       `plot_unstructured(variable, node_x, node_y, title="...")`
-       where `variable` is the data at nodes, and `node_x`, `node_y` are coordinates.
-    5. The NetCDF file path is available as the variable `netcdf_path`.
-    6. Open the file using `ds = xr.open_dataset(netcdf_path)`.
+    2. **Library usage:** You MUST use `geopandas` for spatial operations and plotting.
+    3. **Standard Pattern:**
+       - Load NetCDF -> Convert to DataFrame -> Convert to GeoDataFrame -> Plot.
+    4. **Imports:** Always import `geopandas as gpd`, `pandas as pd`, `xarray as xr`, and `matplotlib.pyplot as plt`.
+    5. The NetCDF file path is available as `netcdf_path`.
     
     RESPONSE FORMAT:
     You must output a JSON object with the following structure:
     {
-        "thought": "Brief reasoning about what code to write.",
-        "code": "The python code to execute."
+        "thought": "Brief reasoning...",
+        "code": "The python code..."
     }
     """
     
