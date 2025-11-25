@@ -7,8 +7,9 @@ from domain_tools import (
     # New imports
     filter_by_point,
     filter_by_bbox,
-    get_dataset_summary
-)
+    get_dataset_summary,
+    visualize_map # <--- New Tool
+]
 
 # List of active tools
 ACTIVE_TOOLS = [
@@ -18,7 +19,8 @@ ACTIVE_TOOLS = [
     filter_by_time_window,
     filter_by_point,
     filter_by_bbox,
-    get_dataset_summary
+    get_dataset_summary,
+    visualize_map
 ]
 
 def get_tools_map():

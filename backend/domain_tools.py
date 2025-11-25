@@ -19,9 +19,9 @@ def get_schism_node_data(netcdf_path: str) -> pd.DataFrame:
     if not lat_var or not lon_var:
         raise ValueError("Could not detect Latitude/Longitude variables.")
         
-    # Round coordinates to ensure consistency across files (fix for "Ghost Groups")
-    lat = np.round(ds[lat_var].values, 6)
-    lon = np.round(ds[lon_var].values, 6)
+    # Use raw coordinates to match Ground Truth (no rounding)
+    lat = ds[lat_var].values
+    lon = ds[lon_var].values
     
     # Target size (number of nodes)
     n_nodes = len(lat)
@@ -37,41 +37,57 @@ def get_schism_node_data(netcdf_path: str) -> pd.DataFrame:
     
     records = []
     
+    # 3D Layer Detection
+    # We check a known 3D variable to determine the number of layers
+    # User script uses 'hvel_x' to determine layers
+    n_layers = 1
+    if 'hvel_x' in ds and ds['hvel_x'].ndim == 3:
+        n_layers = ds['hvel_x'].shape[2] # Assuming (time, node, layer)
+    
     # Simplified extraction loop (optimized from your notebook)
     for t_index, t_val in enumerate(time_vals):
-        # Base dictionary
-        row_data = {
-            'time': t_val,
-            'lat': lat,
-            'lon': lon,
-            'depth': depth
-        }
         
-        # Add variables
-        # We handle both 2D (Surface) and 3D (Layered) variables
-        # For 3D variables, we extract the SURFACE layer (last index) by default
-        target_vars = ['elev', 'wsh_x', 'wsh_y', 'tp', 'hvel_x', 'hvel_y', 'zcor']
-        
-        for var_name in target_vars:
-            if var_name in ds:
-                val = ds[var_name].values[t_index, :]
-                
-                # Case 1: 2D Variable (Node,)
-                if val.ndim == 1 and len(val) == n_nodes:
-                    row_data[var_name] = val
+        # Loop through layers (1 to N)
+        # If n_layers=1 (2D only), this runs once.
+        for layer_idx in range(n_layers):
+            
+            # Base dictionary
+            row_data = {
+                'time': t_val,
+                'lat': lat,
+                'lon': lon,
+                'depth': depth,
+                'layer': np.full(n_nodes, layer_idx) # Add layer index
+            }
+            
+            # Add variables
+            target_vars = ['elev', 'wsh_x', 'wsh_y', 'tp', 'hvel_x', 'hvel_y', 'zcor']
+            
+            for var_name in target_vars:
+                if var_name in ds:
+                    # Extract time slice
+                    val = ds[var_name].values[t_index, :]
                     
-                # Case 2: 3D Variable (Node, Layer) -> Take Surface (Last Layer)
-                elif val.ndim == 2 and val.shape[0] == n_nodes:
-                    row_data[var_name] = val[:, -1] # Surface layer
-                    
+                    # Case 1: 2D Variable (Node,) -> Repeat for every layer
+                    if val.ndim == 1 and len(val) == n_nodes:
+                        row_data[var_name] = val
+                        
+                    # Case 2: 3D Variable (Node, Layer) -> Extract specific layer
+                    elif val.ndim == 2 and val.shape[0] == n_nodes:
+                        # Safety check for layer index
+                        if layer_idx < val.shape[1]:
+                            row_data[var_name] = val[:, layer_idx]
+                        else:
+                            row_data[var_name] = np.zeros(n_nodes)
+                        
+                    else:
+                        # Fill with 0 if shape mismatch
+                        row_data[var_name] = np.zeros(n_nodes)
                 else:
-                    # Fill with 0 if shape mismatch
                     row_data[var_name] = np.zeros(n_nodes)
-            else:
-                row_data[var_name] = np.zeros(n_nodes)
-        
-        df_step = pd.DataFrame(row_data)
-        records.append(df_step)
+            
+            df_step = pd.DataFrame(row_data)
+            records.append(df_step)
 
     full_df = pd.concat(records, ignore_index=True)
     
@@ -170,3 +186,51 @@ def get_dataset_summary(netcdf_path: str) -> pd.DataFrame:
         
     ds.close()
     return pd.DataFrame(data)
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
+
+def visualize_map(df: pd.DataFrame, value_col: str, title: str = None):
+    """
+    Generates a geospatial map plot for any dataframe containing 'lat' and 'lon'.
+    
+    Args:
+        df: DataFrame with 'lat', 'lon', and the data column.
+        value_col: The name of the column to color the map by (e.g., 'elev', 'elev_diff').
+        title: Optional title for the plot.
+    """
+    # 1. Convert to GeoDataFrame (The step the LLM was missing)
+    # Ensure lat/lon are numeric
+    df['lat'] = pd.to_numeric(df['lat'], errors='coerce')
+    df['lon'] = pd.to_numeric(df['lon'], errors='coerce')
+    
+    gdf = gpd.GeoDataFrame(
+        df, 
+        geometry=gpd.points_from_xy(df['lon'], df['lat']), 
+        crs="EPSG:4326"
+    )
+    
+    # 2. Create the Plot (Style copied from your Ground Truth)
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Determine colormap
+    cmap = 'viridis'
+    if 'diff' in value_col.lower() or 'change' in value_col.lower():
+        cmap = 'RdBu_r'
+        
+    gdf.plot(
+        ax=ax,
+        column=value_col,
+        cmap=cmap, 
+        legend=True,
+        markersize=5
+    )
+    
+    if title:
+        ax.set_title(title, fontsize=14)
+    
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    
+    # 3. Return figure (Executor handles plt.show())
+    return fig

@@ -18,7 +18,7 @@ def generate_and_execute_code(query: str, plan: dict, netcdf_path: str, scenario
     - `calculate_wave_velocity(df)` -> Returns DataFrame
     - `get_elevation_difference(df1, df2)` -> Returns DataFrame
     - `filter_by_point(df, lat, lon)` -> Returns DataFrame
-    - `plot_unstructured(variable, x, y)` -> Helper for raw arrays
+    - `visualize_map(df, value_col, title)` -> Returns Figure (Auto-Plots)
     
     CRITICAL RULES:
     1. **ASSIGN VARIABLES:** You MUST assign tool outputs to variables.
@@ -32,9 +32,11 @@ def generate_and_execute_code(query: str, plan: dict, netcdf_path: str, scenario
        df = calculate_wave_velocity(df) # Update the dataframe
        ```
 
-    3. **PLOTTING:** - If using GeoPandas: `gdf.plot(...)` FOLLOWED BY `plt.show()`.
-       - If using standard matplotlib: `plt.plot(...)` FOLLOWED BY `plt.show()`.
-       - **ALWAYS** call `plt.show()` at the end to render the image.
+    3. **PLOTTING:** 
+       ❌ DO NOT write manual plotting code like `plt.plot()` or `df.plot()`.
+       ✅ ALWAYS use the `visualize_map` tool for spatial data.
+       Example: `visualize_map(df, 'elev_diff', 'Elevation Difference')`
+       Note: You still need to call `plt.show()` at the end.
     
     4. **Imports:** `import pandas as pd`, `import geopandas as gpd`, `import matplotlib.pyplot as plt`
     
@@ -44,6 +46,21 @@ def generate_and_execute_code(query: str, plan: dict, netcdf_path: str, scenario
        ❌ NEVER use `xr.open_dataset('filename.nc')` or any string path.
        ✅ ALWAYS use `netcdf_path` or `scenario_path` variables directly.
        Example: `df = get_schism_node_data(scenario_path)`
+
+    7. **RECIPE: Maximum Wave Velocity Map**
+       If the user asks for "Maximum wave velocity map":
+       ```python
+       # 1. Load Data
+       df = get_schism_node_data(scenario_path) 
+       # 2. Calculate Velocity
+       df = calculate_wave_velocity(df)
+       # 3. Aggregate (Max over time per node)
+       # IMPORTANT: as_index=False keeps lat/lon as columns
+       max_df = df.groupby(['lat', 'lon'], as_index=False)['wave_velocity'].max()
+       # 4. Plot
+       fig = plot_unstructured(max_df['wave_velocity'], max_df['lon'], max_df['lat'])
+       plt.show()
+       ```
     """
     
     # Robustly handle steps, ensuring they are strings

@@ -69,14 +69,14 @@ def plan_task(query: str, metadata_bundle: dict) -> dict:
     2. **Data Flow:**
        - Step 1: Load data -> `df = get_schism_node_data(netcdf_path)` (Assign to 'df')
        - Step 2: Process -> `df = calculate_wave_velocity(df)` (Update 'df')
-       - Step 3: Plot -> Use `geopandas` on `df` and call `plt.show()`.
+       - Step 3: Plot -> `visualize_map(df, 'wave_velocity', 'Wave Velocity Map')` and call `plt.show()`.
     
     3. **Terminology:** If the user asks for a Concept (e.g. "Plot Velocity"), CHECK the "SEMANTIC CONCEPTS" list.
        - If it says "Calculate using...", write that code.
        - If it says "Use variable...", use that variable name.
     
     4. **Variable Selection:** Use "CALCULABLE CONCEPTS" if available.
-    5. **Spatial Filtering:** Use `ds.sel(..., method='nearest')` for specific points.
+    5. **Spatial Filtering:** Use `filter_by_point(df, lat, lon)` for specific points.
     6. **Time Filtering:** If user asks for "daytime" or specific hours, use `filter_by_time_window(df, start, end)`.
     7. **Data Structures:** For sorting or tables, use `.to_dataframe()`.
     {comparison_rules}
