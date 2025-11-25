@@ -1,0 +1,37 @@
+[
+    {
+        "query": "Convert NetCDF to a flattened DataFrame for analysis",
+        "plan": "Define a function to iterate through time steps and layers, extracting node variables into a Pandas DataFrame.",
+        "code": "def generate_full_node_table(ds):\n    # Node coordinates and static variables\n    lat = ds['SCHISM_hgrid_node_y'].values\n    lon = ds['SCHISM_hgrid_node_x'].values\n    depth = ds['depth'].values\n    time = ds['time'].values\n    records = []\n    for t_index, t_val in enumerate(time):\n        # Loop over vertical layers\n        for layer in range(ds['hvel_x'].shape[2]):\n            df_layer = pd.DataFrame({\n                'time': t_val, 'lat': lat, 'lon': lon, 'layer': layer,\n                'depth': depth,\n                'elev': ds['elev'].values[t_index, :],\n                'hvel_x': ds['hvel_x'].values[t_index, :, layer],\n                'hvel_y': ds['hvel_y'].values[t_index, :, layer],\n            })\n            records.append(df_layer)\n    full_df = pd.concat(records, ignore_index=True)\n    return full_df"
+    },
+    {
+        "query": "Plot average water depth map",
+        "plan": "Group by lat/lon, calculate mean depth, and plot using GeoPandas.",
+        "code": "# Assuming 'df' is the flattened dataframe\ndepth_data = df.groupby(['lat','lon'], as_index=False)['depth'].mean()\ngdf = gpd.GeoDataFrame(\n    depth_data,\n    geometry=gpd.points_from_xy(depth_data['lon'], depth_data['lat']),\n    crs='EPSG:4326'\n)\nfig, ax = plt.subplots(figsize=(10, 8))\ngdf.plot(ax=ax, column='depth', cmap='viridis', markersize=5, legend=True)\nax.set_title('Geospatial Plot of Points Colored by Depth')\nplt.show()"
+    },
+    {
+        "query": "Find min and max depth points and plot them",
+        "plan": "Filter dataframe for min/max depth values, combine them, and plot with specific annotations.",
+        "code": "depth_max = df[df['depth'] == df['depth'].max()][['lat','lon','depth']].drop_duplicates()\ndepth_min = df[df['depth'] == df['depth'].min()][['lat','lon','depth']].drop_duplicates()\ndepth_main = pd.concat([depth_max, depth_min], ignore_index=True)\n\ngdf = gpd.GeoDataFrame(depth_main, geometry=gpd.points_from_xy(depth_main['lon'], depth_main['lat']), crs='EPSG:4326')\nfig, ax = plt.subplots(figsize=(6,5))\ncolors = ['red' if d == gdf['depth'].max() else 'green' for d in gdf['depth']]\ngdf.plot(ax=ax, color=colors, markersize=80)\nplt.show()"
+    },
+    {
+        "query": "Calculate maximum wave velocity map",
+        "plan": "Calculate vector magnitude of wsh_x/wsh_y, group by location to find max, and plot.",
+        "code": "df['wave_velocity'] = np.sqrt(df['wsh_x']**2 + df['wsh_y']**2)\nwave_vel = df.groupby(['lat','lon'], as_index=False)['wave_velocity'].max()\n\ngdf = gpd.GeoDataFrame(wave_vel, geometry=gpd.points_from_xy(wave_vel['lon'], wave_vel['lat']), crs='EPSG:4326')\nfig, ax = plt.subplots(figsize=(10, 8))\ngdf.plot(ax=ax, column='wave_velocity', cmap='viridis', markersize=5, legend=True)\nplt.show()"
+    },
+    {
+        "query": "Compare difference in surface elevation between two files",
+        "plan": "Load both datasets, group by lat/lon, merge, calculate difference, and plot.",
+        "code": "# ds_base and ds_scen should be pre-processed into DataFrames base_table and scenario_table\nbase_ele = base_table.groupby(['lat', 'lon'], as_index=False)['elev'].mean()\nscen_ele = scenario_table.groupby(['lat', 'lon'], as_index=False)['elev'].mean()\n\nmerge_table = base_ele.merge(scen_ele, on=['lat', 'lon'], how='inner', suffixes=('_base', '_scen'))\nmerge_table['elev_diff'] = merge_table['elev_base'] - merge_table['elev_scen']\n\ngdf = gpd.GeoDataFrame(merge_table, geometry=gpd.points_from_xy(merge_table['lon'], merge_table['lat']), crs='EPSG:4326')\nfig, ax = plt.subplots(figsize=(10, 8))\ngdf.plot(ax=ax, column='elev_diff', cmap='RdBu_r', markersize=5, legend=True)\nplt.show()"
+    },
+    {
+        "query": "Time series analysis for a specific point",
+        "plan": "Filter dataframe using .between() for lat/lon with a small tolerance.",
+        "code": "target_lat = 40.699429\ntarget_lon = -8.756169\ntolerance = 1e-4\n\nfiltered = df[\n    (df['lat'].between(target_lat - tolerance, target_lat + tolerance)) &\n    (df['lon'].between(target_lon - tolerance, target_lon + tolerance))\n]\nfiltered.plot(x='time', y='elev', figsize=(12,6))\nplt.show()"
+    },
+    {
+        "query": "Average water elevation between specific hours (10 AM to 3 PM)",
+        "plan": "Extract hour from time, filter by range, group by location, and plot.",
+        "code": "df['time'] = pd.to_datetime(df['time'])\ndf['hour'] = df['time'].dt.hour\n\nmask = (df['hour'] >= 10) & (df['hour'] <= 15)\nfiltered_df = df[mask]\n\n# Calculate average over this window\nspatial_avg = filtered_df.groupby(['lat','lon'], as_index=False)['elev'].mean()\n\ngdf = gpd.GeoDataFrame(spatial_avg, geometry=gpd.points_from_xy(spatial_avg['lon'], spatial_avg['lat']), crs='EPSG:4326')\nfig, ax = plt.subplots(figsize=(10, 6))\ngdf.plot(ax=ax, column='elev', cmap='viridis', markersize=5, legend=True)\nplt.show()"
+    }
+]
