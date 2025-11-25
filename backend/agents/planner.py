@@ -14,17 +14,14 @@ def plan_task(query: str, metadata_bundle: dict) -> dict:
     memory_context = ""
     if similar_task:
         memory_context = f"""
-        ### 🧠 RELEVANT MEMORY (PREVIOUS SOLUTION):
+        ### 🧠 RELEVANT MEMORY (SUGGESTION ONLY):
         The user asked a similar question before: "{similar_task['query']}"
-        Here is the code that worked efficiently:
-        
+        The solution used this logic:
         ```python
         {similar_task['code']}
         ```
-        
-        **INSTRUCTION:** 1. Use the code above as a template.
-        2. Adapt variable names (e.g. 'elev' vs 'zeta') to match the current file schema.
-        3. Do not reinvent the logic; reuse the Pandas/Xarray pattern shown above.
+        **INSTRUCTION:** Verify this code uses the AVAILABLE TOOLS defined above. 
+        If it uses raw pandas/xarray loops instead of tools like `get_schism_node_data`, IGNORE IT and write a new plan using the tools.
         """
 
     # Generate the text using the new smart formatter
@@ -70,9 +67,9 @@ def plan_task(query: str, metadata_bundle: dict) -> dict:
        - If user asks for "Wave Velocity", plan to use `get_schism_node_data` then `calculate_wave_velocity`.
     
     2. **Data Flow:**
-       - Step 1: Load data -> `df = get_schism_node_data(netcdf_path)`
-       - Step 2: Process -> `df = calculate_wave_velocity(df)`
-       - Step 3: Plot -> Use `geopandas` on the resulting `df`.
+       - Step 1: Load data -> `df = get_schism_node_data(netcdf_path)` (Assign to 'df')
+       - Step 2: Process -> `df = calculate_wave_velocity(df)` (Update 'df')
+       - Step 3: Plot -> Use `geopandas` on `df` and call `plt.show()`.
     
     3. **Terminology:** If the user asks for a Concept (e.g. "Plot Velocity"), CHECK the "SEMANTIC CONCEPTS" list.
        - If it says "Calculate using...", write that code.
@@ -80,7 +77,8 @@ def plan_task(query: str, metadata_bundle: dict) -> dict:
     
     4. **Variable Selection:** Use "CALCULABLE CONCEPTS" if available.
     5. **Spatial Filtering:** Use `ds.sel(..., method='nearest')` for specific points.
-    6. **Data Structures:** For sorting or tables, use `.to_dataframe()`.
+    6. **Time Filtering:** If user asks for "daytime" or specific hours, use `filter_by_time_window(df, start, end)`.
+    7. **Data Structures:** For sorting or tables, use `.to_dataframe()`.
     {comparison_rules}
     
     OUTPUT FORMAT (JSON):

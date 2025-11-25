@@ -153,6 +153,17 @@ with st.sidebar:
         
         if last_user_msg:
             if st.button("🔄 Retry Last Query"):
+                # Find the index of the last user message
+                last_user_idx = None
+                for i, msg in enumerate(st.session_state.messages):
+                    if msg == last_user_msg:
+                        last_user_idx = i
+                
+                # Truncate history to remove the last user message and anything after it
+                if last_user_idx is not None:
+                    st.session_state.messages = st.session_state.messages[:last_user_idx]
+                
+                # Re-append the user message to trigger re-execution
                 st.session_state.messages.append({"role": "user", "content": last_user_msg["content"]})
                 st.rerun()
 

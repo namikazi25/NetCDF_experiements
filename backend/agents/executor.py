@@ -11,25 +11,39 @@ def generate_and_execute_code(query: str, plan: dict, netcdf_path: str, scenario
     
     CONTEXT VARIABLES (ALREADY LOADED):
     - `netcdf_path`: Path to the Baseline file.
-    - `scenario_path`: Path to the Scenario file (None if single mode).
+    - `scenario_path`: Path to the Scenario file.
+    
+    AVAILABLE TOOLS (INJECTED):
+    - `get_schism_node_data(path)` -> Returns DataFrame with cols: ['time', 'lat', 'lon', 'depth', 'elev', ...]
+    - `calculate_wave_velocity(df)` -> Returns DataFrame
+    - `get_elevation_difference(df1, df2)` -> Returns DataFrame
+    - `filter_by_point(df, lat, lon)` -> Returns DataFrame
+    - `plot_unstructured(variable, x, y)` -> Helper for raw arrays
     
     CRITICAL RULES:
-    1. **NEVER write the filename string manually.** INCORRECT: `ds = xr.open_dataset('schouts_1.nc')`
-       CORRECT:   `ds = xr.open_dataset(netcdf_path)`
+    1. **ASSIGN VARIABLES:** You MUST assign tool outputs to variables.
+       ❌ WRONG: `get_schism_node_data(netcdf_path)` (Data is lost!)
+       ✅ CORRECT: `df = get_schism_node_data(netcdf_path)`
        
-    2. **Comparison Mode:**
-       If the plan involves comparison, load the second file using `scenario_path`:
-       `ds_comp = xr.open_dataset(scenario_path)`
-    
-    3. **Imports:** ALWAYS start with:
-       `import xarray as xr`
-       `import numpy as np`
-       `import matplotlib.pyplot as plt`
+    2. **CHAINING:** Pass the variable from step 1 into step 2.
+       ✅ CORRECT:
+       ```python
+       df = get_schism_node_data(netcdf_path)
+       df = calculate_wave_velocity(df) # Update the dataframe
+       ```
 
-    4. **Helper Function:** For maps, use `plot_unstructured(variable, x, y, title=...)`.
-       Do not try to triangulate manually.
+    3. **PLOTTING:** - If using GeoPandas: `gdf.plot(...)` FOLLOWED BY `plt.show()`.
+       - If using standard matplotlib: `plt.plot(...)` FOLLOWED BY `plt.show()`.
+       - **ALWAYS** call `plt.show()` at the end to render the image.
+    
+    4. **Imports:** `import pandas as pd`, `import geopandas as gpd`, `import matplotlib.pyplot as plt`
     
     5. **Output:** Output ONLY valid Python code.
+
+    6. **FILE LOADING BAN:** 
+       ❌ NEVER use `xr.open_dataset('filename.nc')` or any string path.
+       ✅ ALWAYS use `netcdf_path` or `scenario_path` variables directly.
+       Example: `df = get_schism_node_data(scenario_path)`
     """
     
     # Robustly handle steps, ensuring they are strings

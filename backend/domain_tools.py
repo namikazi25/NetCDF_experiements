@@ -19,8 +19,9 @@ def get_schism_node_data(netcdf_path: str) -> pd.DataFrame:
     if not lat_var or not lon_var:
         raise ValueError("Could not detect Latitude/Longitude variables.")
         
-    lat = ds[lat_var].values
-    lon = ds[lon_var].values
+    # Round coordinates to ensure consistency across files (fix for "Ghost Groups")
+    lat = np.round(ds[lat_var].values, 6)
+    lon = np.round(ds[lon_var].values, 6)
     
     # Target size (number of nodes)
     n_nodes = len(lat)
@@ -46,15 +47,25 @@ def get_schism_node_data(netcdf_path: str) -> pd.DataFrame:
             'depth': depth
         }
         
-        # Add variables ONLY if they match the node dimension
-        # This prevents "All arrays must be of the same length" error
-        for var_name in ['elev', 'wsh_x', 'wsh_y', 'tp']:
+        # Add variables
+        # We handle both 2D (Surface) and 3D (Layered) variables
+        # For 3D variables, we extract the SURFACE layer (last index) by default
+        target_vars = ['elev', 'wsh_x', 'wsh_y', 'tp', 'hvel_x', 'hvel_y', 'zcor']
+        
+        for var_name in target_vars:
             if var_name in ds:
                 val = ds[var_name].values[t_index, :]
-                if len(val) == n_nodes:
+                
+                # Case 1: 2D Variable (Node,)
+                if val.ndim == 1 and len(val) == n_nodes:
                     row_data[var_name] = val
+                    
+                # Case 2: 3D Variable (Node, Layer) -> Take Surface (Last Layer)
+                elif val.ndim == 2 and val.shape[0] == n_nodes:
+                    row_data[var_name] = val[:, -1] # Surface layer
+                    
                 else:
-                    # Fill with 0 if shape mismatch (e.g. defined on elements)
+                    # Fill with 0 if shape mismatch
                     row_data[var_name] = np.zeros(n_nodes)
             else:
                 row_data[var_name] = np.zeros(n_nodes)
@@ -92,6 +103,12 @@ def get_elevation_difference(df_base: pd.DataFrame, df_scenario: pd.DataFrame) -
     Returns a DataFrame containing: ['lat', 'lon', 'elev_diff']
     """
     # Group by location to ensure alignment
+    # Round coordinates to ensure matching
+    df_base['lat'] = df_base['lat'].round(6)
+    df_base['lon'] = df_base['lon'].round(6)
+    df_scenario['lat'] = df_scenario['lat'].round(6)
+    df_scenario['lon'] = df_scenario['lon'].round(6)
+
     base_agg = df_base.groupby(['lat', 'lon'], as_index=False)['elev'].mean()
     scen_agg = df_scenario.groupby(['lat', 'lon'], as_index=False)['elev'].mean()
     

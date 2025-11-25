@@ -46,7 +46,7 @@ def plot_unstructured(variable, x, y, title="Unstructured Mesh Plot", cmap=None)
              cmap = 'viridis'
 
     try:
-        plt.figure(figsize=(10, 8))
+        fig = plt.figure(figsize=(10, 8))
         
         # Plot with automatic or calculated vmin/vmax
         plt.tripcolor(x, y, variable, shading='flat', cmap=cmap, vmin=vmin, vmax=vmax)
@@ -57,12 +57,9 @@ def plot_unstructured(variable, x, y, title="Unstructured Mesh Plot", cmap=None)
         plt.ylabel("Latitude")
         plt.axis('equal')
         
-        # Save to buffer
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png')
-        buf.seek(0)
-        plt.close()
-        return buf
+        # Return the figure object. 
+        # The LLM MUST call plt.show() to capture this.
+        return fig
     except Exception as e:
         print(f"Error in plot_unstructured: {e}")
         return None
@@ -142,6 +139,13 @@ print("System: Comparison Datasets Loaded.")
     try:
         with contextlib.redirect_stdout(stdout_capture), contextlib.redirect_stderr(stderr_capture):
             exec(full_code, {}, local_env)
+            
+            # === NEW SAFETY NET ===
+            # Check if there are open figures that weren't saved (user forgot plt.show())
+            if plt.get_fignums() and len(images) == 0:
+                print("System: Auto-capturing open plot...", file=stdout_capture)
+                custom_savefig() 
+            # ======================
             
         # CRITICAL FIX: Truncate Output to prevent LLM Context overflow
         output_text = stdout_capture.getvalue()
