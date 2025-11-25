@@ -6,7 +6,8 @@ import os
 from typing import List, Optional
 import uvicorn
 from nc_processor import extract_metadata
-from llm_service import analyze_nc_metadata, chat_with_context
+from llm_service import chat_with_context
+from memory_service import save_memory_entry
 
 app = FastAPI(title="NetCDF LLM Prototype")
 
@@ -52,6 +53,26 @@ async def chat(request: ChatRequest):
     metadata = metadata_store[request.file_id]
     response = chat_with_context(request.query, metadata)
     return {"response": response}
+
+# 1. Define the Data Model for Feedback
+class FeedbackPayload(BaseModel):
+    query: str
+    code: str
+    plan: str
+
+# 2. Add the NEW Feedback Endpoint
+@app.post("/feedback/save")
+async def save_feedback(payload: FeedbackPayload):
+    """
+    Called when user clicks 'Thumbs Up' in the UI.
+    Saves the successful code recipe to the knowledge base.
+    """
+    try:
+        # This writes to code_memory.json
+        save_memory_entry(payload.query, payload.code, payload.plan)
+        return {"status": "success", "message": "Memory saved successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

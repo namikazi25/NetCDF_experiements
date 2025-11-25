@@ -1,3 +1,4 @@
+import requests # <--- Add this
 import streamlit as st
 import os
 import shutil
@@ -226,13 +227,57 @@ if st.session_state.analysis:
                 st.rerun()
 
 # Display chat history
-for message in st.session_state.messages:
+for i, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
         # Display images if present
         if "images" in message:
             for img_str in message["images"]:
                 st.image(f"data:image/png;base64,{img_str}")
+        
+        # === NEW: HUMAN-IN-THE-LOOP FEEDBACK UI ===
+        # Only show the button if:
+        # 1. It is an assistant message
+        # 2. It has generated code attached
+        if message["role"] == "assistant" and message.get("generated_code"):
+            
+            # Create a small layout for the button
+            col_fb, _ = st.columns([2, 5]) 
+            
+            # Check if this specific message was already saved
+            if message.get("feedback_saved", False):
+                col_fb.caption("✅ Saved to Memory")
+            else:
+                # Unique key based on index 'i' is crucial
+                if col_fb.button("💾 Save as Valid Solution", key=f"save_{i}"):
+                    try:
+                        # 1. Prepare Payload
+                        # The USER query is usually the message immediately before this one (i-1)
+                        if i > 0:
+                            user_query = st.session_state.messages[i-1]["content"]
+                        else:
+                            user_query = "Unknown Query"
+
+                        payload = {
+                            "query": user_query,
+                            "code": message["generated_code"],
+                            "plan": message.get("plan_thought", "No plan recorded")
+                        }
+                        
+                        # 2. Call the Backend API
+                        # Assuming backend runs on port 8000
+                        res = requests.post("http://localhost:8000/feedback/save", json=payload)
+                        
+                        if res.status_code == 200:
+                            st.toast("Recipe saved to memory!", icon="🧠")
+                            # Mark as saved in session state so the button changes state
+                            st.session_state.messages[i]["feedback_saved"] = True
+                            st.rerun() # Refresh to update the button UI
+                        else:
+                            st.error(f"Failed to save: {res.text}")
+                            
+                    except Exception as e:
+                        st.error(f"Connection error: {e}")
 
 # Chat input
 if prompt := st.chat_input("Ask about your data..."):
@@ -297,8 +342,14 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
                     "role": "assistant", 
                     "content": result["response"],
                     "images": result["images"],
-                    "steps_log": result["steps_log"] # Store logs if we want to show them later
+                    "steps_log": result["steps_log"],
+                    # NEW FIELDS:
+                    "generated_code": result.get("generated_code"), 
+                    "plan_thought": result.get("plan_thought"),
+                    "feedback_saved": False # Default state
                 })
+                
+                st.rerun() # Force a rerun to render the new message with the button immediately
                 
             except Exception as e:
                 status_container.update(label="❌ Workflow Failed", state="error")

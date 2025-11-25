@@ -12,29 +12,54 @@ def get_schism_node_data(netcdf_path: str) -> pd.DataFrame:
     """
     ds = xr.open_dataset(netcdf_path)
     
-    # Static variables
-    lat = ds['SCHISM_hgrid_node_y'].values
-    lon = ds['SCHISM_hgrid_node_x'].values
-    depth = ds['depth'].values
+    # Dynamic Coordinate Detection
+    lat_var = next((v for v in ['SCHISM_hgrid_node_y', 'y', 'lat', 'latitude'] if v in ds), None)
+    lon_var = next((v for v in ['SCHISM_hgrid_node_x', 'x', 'lon', 'longitude'] if v in ds), None)
+    
+    if not lat_var or not lon_var:
+        raise ValueError("Could not detect Latitude/Longitude variables.")
+        
+    lat = ds[lat_var].values
+    lon = ds[lon_var].values
+    
+    # Target size (number of nodes)
+    n_nodes = len(lat)
+    
+    # Handle Depth (optional but common)
+    depth = np.zeros(n_nodes)
+    if 'depth' in ds:
+        d_vals = ds['depth'].values
+        if len(d_vals) == n_nodes:
+            depth = d_vals
+            
     time_vals = ds['time'].values
     
     records = []
     
     # Simplified extraction loop (optimized from your notebook)
     for t_index, t_val in enumerate(time_vals):
-        # Handle 3D layers safely - defaulting to last layer (surface) if 3D
-        layer_idx = -1 
-        
-        df_step = pd.DataFrame({
+        # Base dictionary
+        row_data = {
             'time': t_val,
             'lat': lat,
             'lon': lon,
-            'depth': depth,
-            'elev': ds['elev'].values[t_index, :],
-            'wsh_x': ds['wsh_x'].values[t_index, :] if 'wsh_x' in ds else 0,
-            'wsh_y': ds['wsh_y'].values[t_index, :] if 'wsh_y' in ds else 0,
-            'tp': ds['tp'].values[t_index, :] if 'tp' in ds else 0,
-        })
+            'depth': depth
+        }
+        
+        # Add variables ONLY if they match the node dimension
+        # This prevents "All arrays must be of the same length" error
+        for var_name in ['elev', 'wsh_x', 'wsh_y', 'tp']:
+            if var_name in ds:
+                val = ds[var_name].values[t_index, :]
+                if len(val) == n_nodes:
+                    row_data[var_name] = val
+                else:
+                    # Fill with 0 if shape mismatch (e.g. defined on elements)
+                    row_data[var_name] = np.zeros(n_nodes)
+            else:
+                row_data[var_name] = np.zeros(n_nodes)
+        
+        df_step = pd.DataFrame(row_data)
         records.append(df_step)
 
     full_df = pd.concat(records, ignore_index=True)
