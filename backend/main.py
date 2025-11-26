@@ -6,7 +6,7 @@ import os
 from typing import List, Optional
 import uvicorn
 from nc_processor import extract_metadata
-from llm_service import analyze_nc_metadata, chat_with_context
+from llm_service import chat_with_context
 
 app = FastAPI(title="NetCDF LLM Prototype")
 
